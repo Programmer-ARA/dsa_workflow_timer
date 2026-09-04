@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon-192.png" type="image/png">
+<title>workflow.timer — landscape</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1e1e2e;
+    --crust:#161622;
+    --surface0:#242435;
+    --surface1:#2f3044;
+    --overlay:#45475a;
+    --text:#cdd6f4;
+    --sub:#9399b2;
+    --muted:#6c7086;
+
+    --c-read:#89b4fa;
+    --c-solo:#cba6f7;
+    --c-video:#a6e3a1;
+    --c-rewrite:#f9e2af;
+    --c-notes:#fab387;
+    --c-sheet:#94e2d5;
+
+    --danger:#f38ba8;
+    --font-mono:'JetBrains Mono','SF Mono',Consolas,monospace;
+    --font-sans:'Inter',-apple-system,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{
+    height:100%;
+    background:var(--crust);
+    color:var(--text);
+    font-family:var(--font-sans);
+    overflow:hidden;
+  }
+
+  .rotate-msg{
+    display:none;
+    height:100vh;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    text-align:center;
+    padding:24px;
+  }
+  .rotate-icon{
+    width:52px;height:52px;
+    border:2.5px solid var(--sub);
+    border-radius:8px;
+    position:relative;
+    animation:tilt 1.6s ease-in-out infinite;
+  }
+  .rotate-icon::after{
+    content:'';
+    position:absolute;
+    top:6px;left:50%;
+    width:4px;height:4px;
+    border-radius:50%;
+    background:var(--sub);
+    transform:translateX(-50%);
+  }
+  @keyframes tilt{
+    0%,100%{transform:rotate(0deg);}
+    50%{transform:rotate(90deg);}
+  }
+  .rotate-msg p{font-size:15px;color:var(--sub);max-width:240px;}
+
+  .app{
+    display:none;
+    height:100vh;
+    width:100vw;
+    flex-direction:column;
+  }
+
+  @media (orientation:landscape){
+    .rotate-msg{display:none;}
+    .app{display:flex;}
+  }
+  @media (orientation:portrait){
+    .rotate-msg{display:flex;}
+    .app{display:none;}
+  }
+
+  .topbar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:6px 12px;
+    background:var(--surface0);
+    border-bottom:1px solid rgba(255,255,255,0.05);
+    flex-shrink:0;
+  }
+  .topbar .name{
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:var(--sub);
+    flex-shrink:0;
+  }
+  .topbar .name b{color:var(--text);}
+  .topbar input{
+    flex:1;
+    background:transparent;
+    border:none;
+    color:var(--text);
+    font-family:var(--font-mono);
+    font-size:11px;
+    outline:none;
+  }
+  .topbar input::placeholder{color:var(--muted);}
+  .topbar button{
+    background:none;border:none;color:var(--muted);
+    font-size:15px;cursor:pointer;padding:2px 4px;
+    flex-shrink:0;
+  }
+
+  .main{
+    flex:1;
+    display:flex;
+    min-height:0;
+    position:relative;
+  }
+
+  .left{
+    flex:0 0 42%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:4px;
+    border-right:1px solid rgba(255,255,255,0.06);
+    padding:6px;
+    position:relative;
+  }
+
+  .ring-wrap{
+    position:relative;
+    width:min(24vh,120px);
+    height:min(24vh,120px);
+  }
+  .ring-wrap svg{transform:rotate(-90deg);width:100%;height:100%;}
+  .ring-bg{fill:none;stroke:rgba(255,255,255,0.07);stroke-width:6;}
+  .ring-fg{fill:none;stroke:var(--phase-color,var(--sub));stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset 1s linear, stroke .3s;}
+  .ring-center{
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .clock{
+    font-family:var(--font-mono);
+    font-size:min(4.2vh,22px);
+    font-weight:700;
+    color:var(--text);
+    font-variant-numeric:tabular-nums;
+    transition:color .3s;
+  }
+  .clock.warn{color:var(--c-notes);}
+  .clock.over{color:var(--danger);}
+
+  .phase-eyebrow{
+    font-family:var(--font-mono);
+    font-size:9.5px;
+    letter-spacing:.04em;
+    color:var(--phase-color,var(--sub));
+    margin-top:2px;
+  }
+  .phase-name{
+    font-size:13px;
+    font-weight:600;
+    color:var(--text);
+  }
+
+  .right{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    padding:8px 12px;
+    gap:6px;
+    min-width:0;
+  }
+
+  .steps{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+  }
+  .step-row{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:2.5px 7px;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .step-row .dot{
+    width:6px;height:6px;border-radius:50%;
+    background:var(--muted);
+    flex-shrink:0;
+  }
+  .step-row .lbl{
+    font-size:10.5px;
+    color:var(--muted);
+    flex:1;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .step-row.active{background:var(--surface0);}
+  .step-row.active .lbl{color:var(--text);font-weight:600;}
+  .step-row.active .dot{background:var(--phase-color,var(--muted));}
+  .step-row.done .dot{background:var(--phase-color,var(--muted));}
+  .step-row.done .lbl{color:var(--sub);}
+  .step-row .check{font-size:10px;color:var(--phase-color,var(--muted));display:none;flex-shrink:0;}
+  .step-row.done .check{display:inline;}
+  .step-row.done .dot{display:none;}
+
+  .adjust-controls-row{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin-top:2px;
+  }
+  .adjust-controls-row button{
+    font-family:var(--font-sans);
+    font-size:11px;font-weight:600;
+    border-radius:7px;
+    border:1px solid var(--overlay);
+    background:var(--surface1);
+    color:var(--text);
+    cursor:pointer;
+    padding:6px 4px;
+  }
+  .adjust-controls-row .mini{
+    width:24px;height:24px;padding:0;
+    display:flex;align-items:center;justify-content:center;
+    background:transparent;color:var(--sub);
+    font-size:13px;flex:0 0 auto;
+  }
+  .adjust-controls-row .mini:disabled{opacity:.3;}
+  .adjust-controls-row .grow{flex:1;text-align:center;}
+  .adjust-controls-row .primary{
+    flex:1.6;
+    background:var(--phase-color,var(--surface1));
+    border-color:var(--phase-color,var(--overlay));
+    color:var(--crust);
+  }
+  .adjust-controls-row .planned{
+    font-family:var(--font-mono);
+    font-size:9.5px;
+    color:var(--sub);
+    flex:1;
+    text-align:center;
+  }
+
+  .totals-line{
+    font-family:var(--font-mono);
+    font-size:9px;
+    color:var(--muted);
+    text-align:center;
+    margin-top:2px;
+  }
+
+  .timeup-overlay{
+    display:none;
+    position:absolute;
+    inset:0;
+    background:rgba(22,22,34,0.92);
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    padding:10px;
+    z-index:5;
+  }
+  .timeup-overlay.show{display:flex;}
+  .timeup-overlay p{font-size:12px;color:var(--text);}
+  .timeup-overlay .row{display:flex;gap:8px;}
+  .timeup-overlay button{
+    font-size:11px;font-weight:600;
+    padding:7px 14px;
+    border-radius:7px;
+    border:1px solid var(--overlay);
+    background:var(--surface1);
+    color:var(--text);
+    cursor:pointer;
+  }
+  .timeup-overlay button.primary{
+    background:var(--phase-color,var(--surface1));
+    border-color:var(--phase-color,var(--overlay));
+    color:var(--crust);
+  }
+
+  .complete-screen{
+    display:none;
+    flex:1;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:10px;
+    text-align:center;
+    padding:0 20px;
+  }
+  .complete-screen.show{display:flex;}
+  .complete-screen h2{font-size:15px;color:var(--text);}
+  .complete-screen p{font-size:11.5px;color:var(--sub);max-width:320px;}
+  .complete-screen button{
+    font-size:12px;font-weight:600;
+    padding:9px 18px;
+    border-radius:8px;
+    border:1px solid var(--c-video);
+    background:var(--c-video);
+    color:var(--crust);
+    cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="rotate-msg">
+  <div class="rotate-icon" aria-hidden="true"></div>
+  <p>Rotate your phone sideways to use the workflow timer.</p>
+</div>
+
+<div class="app" id="app">
+  <div class="topbar">
+    <div class="name"><b>workflow</b>.timer</div>
+    <input id="problemName" placeholder="problem name (optional)" />
+    <button id="resetAll" aria-label="reset session">↺</button>
+  </div>
+
+  <div class="main" id="main">
+    <div class="left">
+      <div class="ring-wrap">
+        <svg viewBox="0 0 120 120">
+          <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+          <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="0"></circle>
+        </svg>
+        <div class="ring-center"><div class="clock" id="clock">5:00</div></div>
+      </div>
+      <p class="phase-eyebrow" id="eyebrow">PHASE 1 / 6</p>
+      <p class="phase-name" id="phaseName">Read + think</p>
+    </div>
+
+    <div class="right">
+      <div class="steps" id="steps"></div>
+
+      <div class="adjust-controls-row">
+        <button class="mini" id="minusBtn" aria-label="subtract 1 minute">−</button>
+        <span class="planned" id="plannedLabel">5m</span>
+        <button class="mini" id="plusBtn" aria-label="add 1 minute">+</button>
+      </div>
+      <div class="adjust-controls-row">
+        <button class="grow" id="prevBtn">Prev</button>
+        <button class="primary" id="toggleBtn">Start</button>
+        <button class="grow" id="nextBtn">Next</button>
+      </div>
+
+      <p class="totals-line" id="totalsLine">planned 0m · elapsed 0:00 · 0/6 done</p>
+    </div>
+
+    <div class="timeup-overlay" id="timeUpOverlay">
+      <p>Time's up — moving on in <span id="autoCount">10</span>s</p>
+      <div class="row">
+        <button id="addTimeBtn">+2 min</button>
+        <button class="primary" id="nextNowBtn">Next now</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="complete-screen" id="completeScreen">
+    <h2>All phases done</h2>
+    <p>Log this problem in your tracker, then start the next one.</p>
+    <button id="startNextBtn">Start next problem</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const PHASES = [
+    { key:'read',    label:'Read + think',   short:'Read + think',   mins:5,  color:'var(--c-read)',    desc:'' },
+    { key:'solo',    label:'Attempt solo',   short:'Attempt solo',   mins:25, color:'var(--c-solo)',    desc:'' },
+    { key:'video',   label:'Watch video',    short:'Watch video',    mins:15, color:'var(--c-video)',   desc:'' },
+    { key:'rewrite', label:'Rewrite',        short:'Rewrite',        mins:10, color:'var(--c-rewrite)', desc:'' },
+    { key:'notes',   label:'Make notes',     short:'Make notes',     mins:5,  color:'var(--c-notes)',   desc:'' },
+    { key:'sheet',   label:'Update sheet',   short:'Update sheet',   mins:2,  color:'var(--c-sheet)',   desc:'' }
+  ];
+
+  const CIRC = 2 * Math.PI * 52;
+
+  let state, current, running, timerId, totalElapsedSecs, timeUpActive, autoAdvanceTimerId;
+
+  const stepsEl = document.getElementById('steps');
+  const eyebrowEl = document.getElementById('eyebrow');
+  const nameEl = document.getElementById('phaseName');
+  const clockEl = document.getElementById('clock');
+  const ringFg = document.getElementById('ringFg');
+  const leftEl = document.querySelector('.left');
+  const rightEl = document.querySelector('.right');
+  const mainEl = document.getElementById('main');
+  const plannedLabel = document.getElementById('plannedLabel');
+  const toggleBtn = document.getElementById('toggleBtn');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const minusBtn = document.getElementById('minusBtn');
+  const plusBtn = document.getElementById('plusBtn');
+  const totalsLine = document.getElementById('totalsLine');
+  const resetAllBtn = document.getElementById('resetAll');
+  const timeUpOverlay = document.getElementById('timeUpOverlay');
+  const autoCountEl = document.getElementById('autoCount');
+  const addTimeBtn = document.getElementById('addTimeBtn');
+  const nextNowBtn = document.getElementById('nextNowBtn');
+  const completeScreen = document.getElementById('completeScreen');
+  const startNextBtn = document.getElementById('startNextBtn');
+
+  function fmt(s){
+    s = Math.max(0, Math.round(s));
+    const m = Math.floor(s/60), sec = s%60;
+    return m + ':' + String(sec).padStart(2,'0');
+  }
+
+  function beep(){
+    try{
+      const ctx = new (window.AudioContext||window.webkitAudioContext)();
+      [880,1100].forEach((freq, idx) => {
+        setTimeout(() => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.frequency.value = freq;
+          g.gain.setValueAtTime(0.001, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.14, ctx.currentTime+0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.4);
+          o.start(); o.stop(ctx.currentTime+0.4);
+        }, idx*170);
+      });
+    }catch(e){}
+  }
+
+  function beepTimeUp(){
+    try{
+      const ctx = new (window.AudioContext||window.webkitAudioContext)();
+      [1000,1300,1600].forEach((freq, idx) => {
+        setTimeout(() => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type='square';
+          o.frequency.value = freq;
+          g.gain.setValueAtTime(0.001, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime+0.015);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.26);
+          o.start(); o.stop(ctx.currentTime+0.26);
+        }, idx*300);
+      });
+    }catch(e){}
+  }
+
+  function initState(){
+    state = PHASES.map(p => ({ ...p, secs:p.mins*60, remaining:p.mins*60, done:false }));
+    current = 0;
+    running = false;
+    timeUpActive = false;
+    totalElapsedSecs = 0;
+  }
+
+  function renderSteps(){
+    stepsEl.innerHTML = '';
+    state.forEach((p,i) => {
+      const row = document.createElement('div');
+      row.className = 'step-row' + (i===current?' active':'') + (p.done?' done':'');
+      row.style.setProperty('--phase-color', p.color);
+      row.innerHTML = '<span class="check">✓</span><span class="dot"></span><span class="lbl">'+p.short+'</span>';
+      row.addEventListener('click', () => jumpTo(i));
+      stepsEl.appendChild(row);
+    });
+  }
+
+  function renderTotals(){
+    const plannedTotal = state.reduce((s,p)=>s+p.mins,0);
+    const doneCount = state.filter(p=>p.done).length;
+    totalsLine.textContent = 'planned ' + plannedTotal + 'm · elapsed ' + fmt(totalElapsedSecs) + ' · ' + doneCount + '/' + state.length + ' done';
+  }
+
+  function jumpTo(i){
+    pause();
+    clearInterval(autoAdvanceTimerId);
+    timeUpActive = false;
+    current = i;
+    render();
+  }
+
+  function render(){
+    renderSteps();
+    renderTotals();
+
+    if (current >= state.length){
+      mainEl.style.display = 'none';
+      completeScreen.classList.add('show');
+      return;
+    }
+    mainEl.style.display = 'flex';
+    completeScreen.classList.remove('show');
+
+    const p = state[current];
+    leftEl.style.setProperty('--phase-color', p.color);
+    rightEl.style.setProperty('--phase-color', p.color);
+    timeUpOverlay.style.setProperty('--phase-color', p.color);
+    eyebrowEl.textContent = 'PHASE ' + (current+1) + ' / ' + state.length;
+    nameEl.textContent = p.label;
+
+    updateClock();
+
+    timeUpOverlay.classList.toggle('show', timeUpActive);
+
+    plannedLabel.textContent = p.mins + 'm';
+    toggleBtn.textContent = running ? 'Pause' : (p.remaining === p.secs ? 'Start' : 'Resume');
+    prevBtn.disabled = current === 0;
+    minusBtn.disabled = running;
+    plusBtn.disabled = running;
+  }
+
+  function updateClock(){
+    const p = state[current];
+    clockEl.textContent = fmt(p.remaining);
+    clockEl.className = 'clock' + (p.remaining <= 30 && p.remaining > 0 ? ' warn' : '');
+    const frac = Math.max(0, Math.min(1, p.remaining / p.secs));
+    ringFg.style.strokeDasharray = CIRC;
+    ringFg.style.strokeDashoffset = CIRC * (1 - frac);
+    ringFg.style.stroke = p.color;
+  }
+
+  function adjustMins(delta){
+    if (running) return;
+    const p = state[current];
+    p.mins = Math.max(1, p.mins + delta);
+    p.secs = p.mins*60;
+    p.remaining = p.secs;
+    render();
+  }
+
+  function toggle(){ running ? pause() : start(); }
+
+  function tick(){
+    timerId = setInterval(() => {
+      state[current].remaining -= 1;
+      totalElapsedSecs += 1;
+      if (state[current].remaining <= 0){
+        clearInterval(timerId);
+        state[current].remaining = 0;
+        running = false;
+        updateClock();
+        renderTotals();
+        triggerTimeUp();
+        return;
+      }
+      updateClock();
+      renderTotals();
+    }, 1000);
+  }
+
+  function start(){
+    running = true;
+    render();
+    tick();
+  }
+
+  function pause(){
+    running = false;
+    clearInterval(timerId);
+    render();
+  }
+
+  function triggerTimeUp(){
+    timeUpActive = true;
+    beepTimeUp();
+    render();
+    let secs = 10;
+    autoCountEl.textContent = secs;
+    autoAdvanceTimerId = setInterval(() => {
+      secs -= 1;
+      if (secs <= 0){
+        clearInterval(autoAdvanceTimerId);
+        timeUpActive = false;
+        advance();
+      } else {
+        autoCountEl.textContent = secs;
+      }
+    }, 1000);
+  }
+
+  function advance(){
+    clearInterval(timerId);
+    clearInterval(autoAdvanceTimerId);
+    timeUpActive = false;
+    state[current].done = true;
+    current += 1;
+    beep();
+    if (current < state.length){
+      start();
+    } else {
+      running = false;
+      render();
+    }
+  }
+
+  function resetSession(){
+    clearInterval(timerId);
+    clearInterval(autoAdvanceTimerId);
+    initState();
+    document.getElementById('problemName').value = '';
+    render();
+  }
+
+  toggleBtn.addEventListener('click', toggle);
+  prevBtn.addEventListener('click', () => jumpTo(Math.max(0,current-1)));
+  nextBtn.addEventListener('click', () => advance());
+  minusBtn.addEventListener('click', () => adjustMins(-1));
+  plusBtn.addEventListener('click', () => adjustMins(1));
+  resetAllBtn.addEventListener('click', resetSession);
+  startNextBtn.addEventListener('click', resetSession);
+
+  addTimeBtn.addEventListener('click', () => {
+    clearInterval(autoAdvanceTimerId);
+    timeUpActive = false;
+    state[current].secs += 120;
+    state[current].mins += 2;
+    state[current].remaining = 120;
+    running = true;
+    render();
+    tick();
+  });
+
+  nextNowBtn.addEventListener('click', () => {
+    clearInterval(autoAdvanceTimerId);
+    timeUpActive = false;
+    advance();
+  });
+
+  try{
+    if (screen.orientation && screen.orientation.lock){
+      screen.orientation.lock('landscape').catch(function(){});
+    }
+  }catch(e){}
+
+  initState();
+  render();
+})();
+</script>
+
+<script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
+    }
+  </script>
+
+<script>
+(() => {
+  const enterImmersiveLandscape = async () => {
+    try {
+      if (screen.orientation && screen.orientation.lock) {
+        await screen.orientation.lock("landscape");
+      }
+    } catch (e) {}
+
+    try {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (e) {}
+  };
+
+  const run = () => {
+    enterImmersiveLandscape();
+    setTimeout(() => {
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock("landscape").catch(() => {});
+      }
+    }, 250);
+  };
+
+  window.addEventListener("load", run);
+  document.addEventListener("click", enterImmersiveLandscape, { once: true });
+  document.addEventListener("touchstart", enterImmersiveLandscape, { once: true });
+})();
+</script>
+
+</body>
+</html>
